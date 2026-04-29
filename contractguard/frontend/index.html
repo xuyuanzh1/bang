@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>ContractGuard</title><style>
+body{background:linear-gradient(135deg,#667eea,#764ba2);font-family:sans-serif;margin:0;padding:20px}
+.container{max-width:1000px;margin:auto}
+.card{background:white;border-radius:20px;padding:25px;margin-bottom:20px;box-shadow:0 10px 25px rgba(0,0,0,0.1)}
+.upload-area{border:2px dashed #ccc;border-radius:16px;padding:40px;text-align:center;cursor:pointer}
+.btn{background:#667eea;color:white;border:none;padding:10px 24px;border-radius:30px;cursor:pointer}
+.loading{text-align:center}
+.spinner{width:40px;height:40px;border:4px solid #f3f3f3;border-top:#667eea;border-radius:50%;animation:spin 1s linear infinite;margin:auto}
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+.report{display:none}
+.finding-item{border-left:4px solid;padding:12px;margin:10px 0;background:#f9fafb}
+.high{border-left-color:#dc2626} .medium{border-left-color:#d97706} .low{border-left-color:#059669}
+.summary-stats{display:flex;gap:15px;flex-wrap:wrap}
+.stat-card{background:#f3f4f6;padding:15px;border-radius:12px;text-align:center;flex:1}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="card" id="uploadCard"><div class="upload-area" id="uploadArea"><div>📄</div><h3>点击或拖拽上传PDF合同</h3><input type="file" id="fileInput" style="display:none" accept=".pdf"><button class="btn" id="uploadBtn">选择文件</button></div></div>
+<div class="card loading" id="loadingCard" style="display:none"><div class="spinner"></div><h3>AI 多Agent并行审阅中...</h3></div>
+<div class="card report" id="reportCard"><h2>审查报告</h2><div id="summaryStats"></div><div id="findingsList"></div><pre id="reportText" style="background:#f3f4f6;padding:15px;border-radius:12px;overflow:auto"></pre><button class="btn" id="newBtn">+ 新合同</button></div>
+</div>
+<script>
+const upCard=document.getElementById('uploadCard'), loadCard=document.getElementById('loadingCard'), repCard=document.getElementById('reportCard');
+const upArea=document.getElementById('uploadArea'), fileInp=document.getElementById('fileInput'), upBtn=document.getElementById('uploadBtn');
+let selFile=null;
+upBtn.onclick=()=>fileInp.click();
+fileInp.onchange=e=>{if(e.target.files[0]){selFile=e.target.files[0];upload();}};
+upArea.ondragover=e=>{e.preventDefault();upArea.classList.add('dragover');};
+upArea.ondragleave=()=>upArea.classList.remove('dragover');
+upArea.ondrop=e=>{e.preventDefault();upArea.classList.remove('dragover');if(e.dataTransfer.files[0]){selFile=e.dataTransfer.files[0];upload();}};
+async function upload(){
+if(!selFile||!selFile.name.endsWith('.pdf')){alert('请选PDF');return;}
+upCard.style.display='none'; loadCard.style.display='block';
+let fd=new FormData(); fd.append('file',selFile);
+try{
+let res=await fetch('/api/upload',{method:'POST',body:fd});
+let data=await res.json();
+display(data);
+}catch(e){alert('失败');reset();}
+}
+function display(d){
+let s=d.risk_summary||{};
+document.getElementById('summaryStats').innerHTML=`<div class=stat-card><b>${s.overall_risk||'?'}</b><br>整体风险</div><div class=stat-card><b>${s.overall_score||0}</b><br>评分</div><div class=stat-card><b>${s.high_risk_count||0}</b><br>高风险</div><div class=stat-card><b>${s.medium_risk_count||0}</b><br>中风险</div><div class=stat-card><b>${s.low_risk_count||0}</b><br>低风险</div>`;
+let findings=d.findings||[];
+document.getElementById('findingsList').innerHTML=findings.map(f=>`<div class="finding-item ${f.risk_level}"><b>${f.risk_type} [${f.risk_level}]</b><br>${f.description}<br><i>建议: ${f.suggestion}</i><br>置信度:${(f.confidence*100).toFixed(0)}%</div>`).join('');
+document.getElementById('reportText').innerText=d.report||'无报告';
+loadCard.style.display='none'; repCard.style.display='block';
+}
+function reset(){upCard.style.display='block';loadCard.style.display='none';repCard.style.display='none';selFile=null;fileInp.value='';}
+document.getElementById('newBtn').onclick=reset;
+</script>
+</body>
+</html>
